@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DevSync Relay Server</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Fira Code', monospace;
+      background-color: #0d1117;
+      color: #c9d1d9;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .card {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 12px;
+      padding: 32px;
+      max-width: 580px;
+      width: 100%;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      background: rgba(126, 231, 135, 0.15);
+      color: #7ee787;
+    }
+    .dot {
+      width: 8px;
+      height: 8px;
+      background: #7ee787;
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+    h1 { font-size: 20px; color: #58a6ff; font-weight: 600; }
+    p { font-size: 14px; color: #8b949e; line-height: 1.6; margin-bottom: 20px; }
+    .endpoints {
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 16px;
+      font-family: monospace;
+      font-size: 13px;
+    }
+    .endpoint-item {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 0;
+      border-bottom: 1px solid #21262d;
+    }
+    .endpoint-item:last-child { border-bottom: none; }
+    .method { color: #d2a8ff; font-weight: bold; }
+    .path { color: #79c0ff; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="header">
+      <h1>DevSync Relay Server</h1>
+      <div class="status-badge">
+        <div class="dot"></div>
+        <span>Operational</span>
+      </div>
+    </div>
+    <p>Zero-retention serverless message relay and real-time push infrastructure for DevSync peer devices.</p>
+    <div class="endpoints">
+      <div class="endpoint-item">
+        <span class="method">GET</span>
+        <span class="path">/api/index</span>
+      </div>
+      <div class="endpoint-item">
+        <span class="method">POST</span>
+        <span class="path">/api/devices/register</span>
+      </div>
+      <div class="endpoint-item">
+        <span class="method">POST</span>
+        <span class="path">/api/messages/send</span>
+      </div>
+      <div class="endpoint-item">
+        <span class="method">POST</span>
+        <span class="path">/api/messages/ack</span>
+      </div>
+      <div class="endpoint-item">
+        <span class="method">GET</span>
+        <span class="path">/api/events?deviceId={id}</span>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
