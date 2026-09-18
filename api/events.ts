@@ -2,6 +2,10 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { fetchAndClearMessages } from '../lib/redis';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept, X-Requested-With');
+
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
@@ -14,12 +18,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const isSse = req.headers.accept?.includes('text/event-stream');
 
   if (isSse) {
-    // Set SSE Headers
+    // Set SSE Headers with explicit CORS
     res.writeHead(200, {
       'Content-Type': 'text/event-stream',
       'Cache-Control': 'no-cache, no-transform',
       'Connection': 'keep-alive',
       'X-Accel-Buffering': 'no',
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Headers': '*',
     });
 
     // Send initial connected heartbeat
