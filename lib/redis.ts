@@ -138,15 +138,31 @@ function resolveRedisCredentials(): { url: string; token: string } | null {
   return null;
 }
 
-const credentials = resolveRedisCredentials();
-export const isRedisConfigured = !!credentials;
+function initRedis(): Redis | null {
+  // 1. Official Upstash auto-initializer from environment
+  try {
+    const fromEnv = Redis.fromEnv();
+    if (fromEnv) return fromEnv;
+  } catch (_) {
+    // Fall back to manual/prefixed credential scan
+  }
 
-export const redis = credentials
-  ? new Redis({
-      url: credentials.url,
-      token: credentials.token,
-    })
-  : null;
+  // 2. Custom scan for DEVSYNC_KV_REST_API_URL or other Vercel prefixed variables
+  const creds = resolveRedisCredentials();
+  if (creds) {
+    try {
+      return new Redis({
+        url: creds.url,
+        token: creds.token,
+      });
+    } catch (_) {}
+  }
+
+  return null;
+}
+
+export const redis = initRedis();
+export const isRedisConfigured = !!redis;
 
 // Track used OTPs to prevent replay attacks
 const usedOtps = new Set<string>();
