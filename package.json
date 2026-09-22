@@ -3,7 +3,8 @@
   "version": "1.0.0",
   "description": "Zero-retention real-time message relay server on Vercel for DevSync",
   "scripts": {
-    "build": "tsc --noEmit"
+    "build": "tsc --noEmit",
+    "test": "node --test test/totp.test.mjs"
   },
   "dependencies": {
     "@types/node": "^20.12.7",

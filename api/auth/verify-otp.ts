@@ -1,5 +1,4 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import crypto from 'crypto';
 import {
   fetchOtp,
   removeOtp,
@@ -7,8 +6,11 @@ import {
   saveUserInStore,
   registerDeviceInStore,
   savePairedConnectionInStore,
+  markOtpUsed,
+  isOtpUsed,
 } from '../../lib/redis';
 import { DeviceRegistration, UserAccount, PairedConnection } from '../../lib/types';
+import { verifyTotp, getDeterministicConnectionCode } from '../../lib/totp';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -24,39 +26,60 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { email, otp, device } = req.body || {};
+    const { email, otp, device, phone } = req.body || {};
 
     if (!email || !otp) {
       return res.status(400).json({ error: 'Email and 6-digit OTP are required' });
     }
 
-    const storedOtpRecord = await fetchOtp(email.trim());
+    const cleanEmail = email.toString().trim();
+    const cleanOtp = otp.toString().trim();
 
-    if (!storedOtpRecord) {
-      return res.status(400).json({ error: 'Invalid or expired OTP. Please request a new code.' });
+    if (cleanOtp.length !== 6) {
+      return res.status(400).json({ error: 'Verification code must be exactly 6 digits' });
     }
 
-    if (storedOtpRecord.otp !== otp.toString().trim()) {
-      storedOtpRecord.attempts += 1;
-      if (storedOtpRecord.attempts >= 5) {
-        await removeOtp(email.trim());
-        return res.status(400).json({ error: 'Too many incorrect attempts. Please request a new OTP.' });
+    // Check if OTP was already consumed
+    if (await isOtpUsed(cleanEmail, cleanOtp)) {
+      return res.status(400).json({ error: 'This verification code has already been used. Please request a new code.' });
+    }
+
+    // 1. Try fetching from store (Redis / memory)
+    const storedOtpRecord = await fetchOtp(cleanEmail);
+
+    let isOtpValid = false;
+
+    if (storedOtpRecord && storedOtpRecord.otp === cleanOtp) {
+      isOtpValid = true;
+    } else if (verifyTotp(cleanEmail, cleanOtp)) {
+      // Stateless TOTP fallback: guarantees verification across isolated serverless instances
+      isOtpValid = true;
+    }
+
+    if (!isOtpValid) {
+      if (storedOtpRecord) {
+        storedOtpRecord.attempts = (storedOtpRecord.attempts || 0) + 1;
+        if (storedOtpRecord.attempts >= 5) {
+          await removeOtp(cleanEmail);
+          return res.status(400).json({ error: 'Too many incorrect attempts. Please request a new OTP.' });
+        }
       }
-      return res.status(400).json({ error: 'Incorrect OTP. Please check the code in your email.' });
+      return res.status(400).json({ error: 'Incorrect or expired OTP. Please check the code in your email (and Spam folder).' });
     }
 
-    // OTP is valid! Purge it to prevent replay attacks
-    await removeOtp(email.trim());
+    // OTP is valid! Mark as consumed and purge from store
+    await markOtpUsed(cleanEmail, cleanOtp);
+    await removeOtp(cleanEmail);
 
     // Check if user already has an account
-    let user = await getUserByEmailFromStore(email.trim());
+    let user = await getUserByEmailFromStore(cleanEmail);
 
     if (!user) {
-      // Generate a persistent 6-digit Connection Code for this user
-      const code = crypto.randomInt(100000, 1000000).toString();
+      // Use deterministic code or persistent store
+      const code = getDeterministicConnectionCode(cleanEmail);
       user = {
-        email: email.trim(),
-        phone: storedOtpRecord.phone,
+        email: cleanEmail,
+        phone: phone?.toString().trim() || storedOtpRecord?.phone || '',
         primaryDeviceId: device?.deviceId || 'device-primary',
         connectionCode: code,
         createdAt: Date.now(),

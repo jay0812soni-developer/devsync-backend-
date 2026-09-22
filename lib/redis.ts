@@ -95,16 +95,38 @@ class MemoryStorage {
 
 const memoryStorage = new MemoryStorage();
 
-export const isRedisConfigured = !!(
-  process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN
-);
+const redisUrl = process.env.UPSTASH_REDIS_REST_URL || process.env.KV_REST_API_URL;
+const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.KV_REST_API_TOKEN;
+
+export const isRedisConfigured = !!(redisUrl && redisToken);
 
 export const redis = isRedisConfigured
   ? new Redis({
-      url: process.env.UPSTASH_REDIS_REST_URL!,
-      token: process.env.UPSTASH_REDIS_REST_TOKEN!,
+      url: redisUrl!,
+      token: redisToken!,
     })
   : null;
+
+// Track used OTPs to prevent replay attacks
+const usedOtps = new Set<string>();
+
+export async function markOtpUsed(email: string, otp: string): Promise<void> {
+  const key = `used_otp:${email.toLowerCase().trim()}:${otp.trim()}`;
+  if (redis) {
+    await redis.set(key, '1', { ex: 900 }); // 15 min TTL
+  } else {
+    usedOtps.add(key);
+  }
+}
+
+export async function isOtpUsed(email: string, otp: string): Promise<boolean> {
+  const key = `used_otp:${email.toLowerCase().trim()}:${otp.trim()}`;
+  if (redis) {
+    const val = await redis.get(key);
+    return !!val;
+  }
+  return usedOtps.has(key);
+}
 
 // --- Device Store ---
 

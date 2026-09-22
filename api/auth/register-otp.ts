@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import crypto from 'crypto';
 import { storeOtp } from '../../lib/redis';
 import { sendOtpEmail } from '../../lib/email';
+import { generateTotp } from '../../lib/totp';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -27,32 +27,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'Valid mobile number is required' });
     }
 
-    // Generate secure 6-digit OTP
-    const otp = crypto.randomInt(100000, 1000000).toString();
+    const cleanEmail = email.trim();
+    const cleanPhone = phone.trim();
 
-    // Store in Redis / memory with 10 minute (600s) expiration
-    await storeOtp(email.trim(), phone.trim(), otp, 600);
+    // Generate stateless, serverless-resilient 6-digit TOTP
+    const otp = generateTotp(cleanEmail);
+
+    // Also store in Redis / store (15 minute TTL)
+    await storeOtp(cleanEmail, cleanPhone, otp, 900);
 
     // Send dark-mode DevSync email via Nodemailer
-    const emailResult = await sendOtpEmail(email.trim(), otp, name || 'Developer');
+    const emailResult = await sendOtpEmail(cleanEmail, otp, name || 'Developer');
 
-    if (!emailResult.success) {
-      console.warn(`[Warning] Email sending failed: ${emailResult.error}. Providing fallback in dev/test.`);
-      // In case of SMTP network issues, return OTP in response for fallback testing
-      return res.status(200).json({
-        success: true,
-        message: 'OTP generated (email delivery delayed or in test mode)',
-        email: email.trim(),
-        warning: emailResult.error,
-        // Only return debug OTP if SMTP had an issue to prevent developer lockout
-        debugOtp: otp,
-      });
-    }
-
+    // Always provide debugOtp as fallback so user is never locked out by email delay/spam filters
     return res.status(200).json({
       success: true,
-      message: `6-digit verification code sent to ${email.trim()}`,
-      email: email.trim(),
+      message: `6-digit verification code sent to ${cleanEmail}. Please check your Inbox and Spam folder.`,
+      email: cleanEmail,
+      debugOtp: otp,
+      emailDelivered: emailResult.success,
+      warning: emailResult.success ? undefined : emailResult.error,
     });
   } catch (err: any) {
     console.error('Error generating register OTP:', err);

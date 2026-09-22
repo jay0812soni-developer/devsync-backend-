@@ -7,15 +7,25 @@ const smtpUser = process.env.SMTP_USER || 'sonijay1908@gmail.com';
 const smtpPass = (process.env.SMTP_PASS || 'lgey stsr ywii vnjv').replace(/\s+/g, '');
 const fromEmail = process.env.FROM_EMAIL || `"DevSync" <${smtpUser}>`;
 
-const transporter = nodemailer.createTransport({
-  host: smtpHost,
-  port: smtpPort,
-  secure: smtpPort === 465, // true for 465, false for 587
-  auth: {
-    user: smtpUser,
-    pass: smtpPass,
-  },
-});
+const transporter = nodemailer.createTransport(
+  smtpHost === 'smtp.gmail.com'
+    ? {
+        service: 'gmail',
+        auth: {
+          user: smtpUser,
+          pass: smtpPass,
+        },
+      }
+    : {
+        host: smtpHost,
+        port: smtpPort,
+        secure: smtpPort === 465,
+        auth: {
+          user: smtpUser,
+          pass: smtpPass,
+        },
+      }
+);
 
 /**
  * Builds our signature dark-mode DevSync email template
@@ -135,9 +145,15 @@ export async function sendOtpEmail(recipientEmail: string, otp: string, recipien
     const info = await transporter.sendMail({
       from: fromEmail,
       to: recipientEmail,
-      subject: `Your DevSync Verification Code: ${otp}`,
-      text: `Your DevSync 6-digit verification code is: ${otp}. It expires in 10 minutes.`,
+      subject: `DevSync Verification Code: ${otp}`,
+      text: `Your DevSync 6-digit verification code is: ${otp}. It expires in 15 minutes.\n\nIf you did not request this verification, you can safely ignore this email.`,
       html: htmlContent,
+      priority: 'high',
+      headers: {
+        'X-Priority': '1',
+        'X-MSMail-Priority': 'High',
+        'Importance': 'high',
+      },
     });
 
     console.log(`[Email] OTP email sent successfully to ${recipientEmail}, messageId: ${info.messageId}`);
