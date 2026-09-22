@@ -39,14 +39,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Send dark-mode DevSync email via Nodemailer
     const emailResult = await sendOtpEmail(cleanEmail, otp, name || 'Developer');
 
-    // Always provide debugOtp as fallback so user is never locked out by email delay/spam filters
+    if (!emailResult.success) {
+      return res.status(500).json({
+        success: false,
+        error: `Failed to send verification email: ${emailResult.error || 'SMTP delivery error'}. Please try again.`,
+      });
+    }
+
     return res.status(200).json({
       success: true,
       message: `6-digit verification code sent to ${cleanEmail}. Please check your Inbox and Spam folder.`,
       email: cleanEmail,
-      debugOtp: otp,
-      emailDelivered: emailResult.success,
-      warning: emailResult.success ? undefined : emailResult.error,
     });
   } catch (err: any) {
     console.error('Error generating register OTP:', err);
