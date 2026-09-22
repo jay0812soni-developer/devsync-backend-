@@ -5,6 +5,7 @@ import {
   savePairedConnectionInStore,
   registerDeviceInStore,
   enqueueMessageInStore,
+  isRedisConfigured,
 } from '../../lib/redis';
 import { DeviceRegistration, PairedConnection, EncryptedMessagePayload } from '../../lib/types';
 
@@ -42,6 +43,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const existingPair = await getPairedConnectionFromStore(cleanCode);
 
     if (!user && !existingPair) {
+      if (!isRedisConfigured) {
+        return res.status(404).json({
+          error:
+            'Connection Code not found across serverless instances. The backend is running in ephemeral mode (Redis not connected). Enable Vercel KV / Upstash Redis in your Vercel project Storage, scan the QR code directly, or tap "Login with Email".',
+        });
+      }
       return res.status(404).json({
         error: 'Invalid Connection Code. Make sure your primary device has registered and generated a code.',
       });
@@ -51,7 +58,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (!primaryDevice) {
       return res.status(404).json({
-        error: 'Primary device not found for this Connection Code. Please verify your connection setup.',
+        error: isRedisConfigured
+          ? 'Primary device not found for this Connection Code. Please verify your connection setup.'
+          : 'Primary device session expired in ephemeral mode. Please enable Vercel KV / Upstash Redis, or pair using the QR code directly.',
       });
     }
 
