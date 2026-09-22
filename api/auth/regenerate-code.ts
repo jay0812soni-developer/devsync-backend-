@@ -24,29 +24,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const { email, deviceId } = req.body || {};
 
-    if (!email) {
-      return res.status(400).json({ error: 'Email is required to regenerate connection code' });
+    if (!email && !deviceId) {
+      return res.status(400).json({ error: 'Email or deviceId is required to regenerate connection code' });
     }
 
-    const user = await getUserByEmailFromStore(email.trim());
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
+    let user = email ? await getUserByEmailFromStore(email.trim()) : null;
 
     const newCode = crypto.randomInt(100000, 1000000).toString();
-    user.connectionCode = newCode;
-    user.updatedAt = Date.now();
-    await saveUserInStore(user);
+    if (user) {
+      user.connectionCode = newCode;
+      user.updatedAt = Date.now();
+      await saveUserInStore(user);
+    }
 
     // Also update or re-link pairing record
-    const device = await getDeviceFromStore(deviceId || user.primaryDeviceId);
-    if (device) {
-      const pair: PairedConnection = {
-        connectionCode: newCode,
-        primaryDevice: device,
-        createdAt: Date.now(),
-      };
-      await savePairedConnectionInStore(pair);
+    const targetDeviceId = deviceId || user?.primaryDeviceId;
+    if (targetDeviceId) {
+      const device = await getDeviceFromStore(targetDeviceId);
+      if (device) {
+        const pair: PairedConnection = {
+          connectionCode: newCode,
+          primaryDevice: device,
+          createdAt: Date.now(),
+        };
+        await savePairedConnectionInStore(pair);
+      }
     }
 
     return res.status(200).json({
