@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { registerDeviceInStore, getDeviceFromStore } from '../../lib/redis';
-import { DeviceRegistration } from '../../lib/types';
+import { registerDeviceInStore, getDeviceFromStore, savePairedConnectionInStore } from '../../lib/redis';
+import { DeviceRegistration, PairedConnection } from '../../lib/types';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -48,6 +48,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     };
 
     await registerDeviceInStore(device);
+
+    const rawCode = (body as any).connectionCode?.toString();
+    if (rawCode) {
+      const cleanCode = rawCode.replace(/[^0-9]/g, '').trim();
+      if (cleanCode.length === 6) {
+        const pair: PairedConnection = {
+          connectionCode: cleanCode,
+          primaryDevice: device,
+          createdAt: Date.now(),
+        };
+        await savePairedConnectionInStore(pair);
+      }
+    }
 
     return res.status(200).json({
       status: 'registered',

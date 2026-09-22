@@ -6,6 +6,7 @@ import {
   registerDeviceInStore,
   enqueueMessageInStore,
   isRedisConfigured,
+  getDeviceFromStore,
 } from '../../lib/redis';
 import { DeviceRegistration, PairedConnection, EncryptedMessagePayload } from '../../lib/types';
 
@@ -54,7 +55,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       });
     }
 
-    const primaryDevice = existingPair?.primaryDevice;
+    let primaryDevice = existingPair?.primaryDevice;
+    if (!primaryDevice && user && user.primaryDeviceId) {
+      const dev = await getDeviceFromStore(user.primaryDeviceId);
+      if (dev) {
+        primaryDevice = dev;
+      }
+    }
 
     if (!primaryDevice) {
       return res.status(404).json({
@@ -82,7 +89,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       connectionCode: cleanCode,
       primaryDevice,
       secondaryDevice,
-      createdAt: existingPair.createdAt || Date.now(),
+      createdAt: existingPair?.createdAt || Date.now(),
       pairedAt: Date.now(),
     };
     await savePairedConnectionInStore(updatedPair);
