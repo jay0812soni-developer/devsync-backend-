@@ -95,26 +95,56 @@ class MemoryStorage {
 
 const memoryStorage = new MemoryStorage();
 
-const redisUrl =
-  process.env.UPSTASH_REDIS_REST_URL ||
-  process.env.KV_REST_API_URL ||
-  process.env.VERCEL_KV_REST_API_URL ||
-  process.env.REDIS_REST_URL ||
-  process.env.REDIS_URL;
+function resolveRedisCredentials(): { url: string; token: string } | null {
+  // 1. Check known and prefixed environment variables directly
+  const explicitUrl =
+    process.env.DEVSYNC_KV_REST_API_URL ||
+    process.env.UPSTASH_REDIS_REST_URL ||
+    process.env.KV_REST_API_URL ||
+    process.env.VERCEL_KV_REST_API_URL ||
+    process.env.REDIS_REST_URL ||
+    process.env.REDIS_URL;
 
-const redisToken =
-  process.env.UPSTASH_REDIS_REST_TOKEN ||
-  process.env.KV_REST_API_TOKEN ||
-  process.env.VERCEL_KV_REST_API_TOKEN ||
-  process.env.REDIS_REST_TOKEN ||
-  process.env.REDIS_TOKEN;
+  const explicitToken =
+    process.env.DEVSYNC_KV_REST_API_TOKEN ||
+    process.env.UPSTASH_REDIS_REST_TOKEN ||
+    process.env.KV_REST_API_TOKEN ||
+    process.env.VERCEL_KV_REST_API_TOKEN ||
+    process.env.REDIS_REST_TOKEN ||
+    process.env.REDIS_TOKEN;
 
-export const isRedisConfigured = !!(redisUrl && redisToken);
+  if (explicitUrl && explicitToken) {
+    return { url: explicitUrl, token: explicitToken };
+  }
 
-export const redis = isRedisConfigured
+  // 2. Dynamic scan: Find any variable ending with _KV_REST_API_URL or _REST_API_URL
+  let candidateUrl: string | undefined;
+  let candidateToken: string | undefined;
+
+  for (const [key, val] of Object.entries(process.env)) {
+    if (!val) continue;
+    if (key.endsWith('_KV_REST_API_URL') || key.endsWith('_REST_API_URL')) {
+      candidateUrl = val;
+    }
+    if (key.endsWith('_KV_REST_API_TOKEN') || key.endsWith('_REST_API_TOKEN')) {
+      candidateToken = val;
+    }
+  }
+
+  if (candidateUrl && candidateToken) {
+    return { url: candidateUrl, token: candidateToken };
+  }
+
+  return null;
+}
+
+const credentials = resolveRedisCredentials();
+export const isRedisConfigured = !!credentials;
+
+export const redis = credentials
   ? new Redis({
-      url: redisUrl!,
-      token: redisToken!,
+      url: credentials.url,
+      token: credentials.token,
     })
   : null;
 
