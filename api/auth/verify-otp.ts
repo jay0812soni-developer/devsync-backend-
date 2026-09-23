@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import jwt from 'jsonwebtoken';
 import {
   fetchOtp,
   removeOtp,
@@ -11,6 +12,8 @@ import {
 } from '../../lib/redis';
 import { DeviceRegistration, UserAccount, PairedConnection } from '../../lib/types';
 import { verifyTotp, getDeterministicConnectionCode } from '../../lib/totp';
+
+const JWT_SECRET = process.env.JWT_SECRET || 'devsync-mesh-jwt-secret-audit-key-2026';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -26,7 +29,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { email, otp, device, phone } = req.body || {};
+    const rawBody = req.body || {};
+    const { email, otp, phone } = rawBody;
+    const device = rawBody.device || (rawBody.deviceId ? {
+      deviceId: rawBody.deviceId,
+      deviceName: rawBody.deviceName,
+      platform: rawBody.platform,
+      signingPublicKey: rawBody.signingPublicKey,
+      exchangePublicKey: rawBody.exchangePublicKey,
+      lanIp: rawBody.lanIp,
+      lanPort: rawBody.lanPort,
+    } : null);
 
     if (!email || !otp) {
       return res.status(400).json({ error: 'Email and 6-digit OTP are required' });
@@ -111,8 +124,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       await savePairedConnectionInStore(pair);
     }
 
+    const token = jwt.sign(
+      {
+        email: user.email,
+        deviceId: device?.deviceId || user.primaryDeviceId || 'device-primary',
+        role: 'PRIMARY',
+      },
+      JWT_SECRET,
+      { expiresIn: '30d' }
+    );
+
     return res.status(200).json({
       success: true,
+      token,
       message: 'Authentication successful',
       user: {
         email: user.email,

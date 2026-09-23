@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import jwt from 'jsonwebtoken';
 import {
   getUserByConnectionCodeFromStore,
   getPairedConnectionFromStore,
@@ -9,6 +10,8 @@ import {
   getDeviceFromStore,
 } from '../../lib/redis';
 import { DeviceRegistration, PairedConnection, EncryptedMessagePayload } from '../../lib/types';
+
+const JWT_SECRET = process.env.JWT_SECRET || 'devsync-mesh-jwt-secret-audit-key-2026';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -24,7 +27,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const { connectionCode, device } = req.body || {};
+    const rawBody = req.body || {};
+    const connectionCode = rawBody.connectionCode;
+    const device = rawBody.device || (rawBody.deviceId ? {
+      deviceId: rawBody.deviceId,
+      deviceName: rawBody.deviceName,
+      platform: rawBody.platform,
+      signingPublicKey: rawBody.signingPublicKey,
+      exchangePublicKey: rawBody.exchangePublicKey,
+      lanIp: rawBody.lanIp,
+      lanPort: rawBody.lanPort,
+    } : null);
 
     if (!connectionCode || typeof connectionCode !== 'string') {
       return res.status(400).json({ error: '6-digit Connection Code is required' });
@@ -113,8 +126,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     };
     await enqueueMessageInStore(pairNotificationToDevice1);
 
+    const token = jwt.sign(
+      {
+        email: user?.email || '',
+        deviceId: secondaryDevice.deviceId,
+        role: 'MEMBER',
+      },
+      JWT_SECRET,
+      { expiresIn: '30d' }
+    );
+
     return res.status(200).json({
       success: true,
+      token,
       message: 'Hurray! Connection Established!',
       connectionCode: cleanCode,
       user: {
@@ -122,6 +146,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         phone: user?.phone || '',
       },
       pairedDevice: primaryDevice,
+      peers: [primaryDevice],
     });
   } catch (err: any) {
     console.error('Error in pair-device:', err);
