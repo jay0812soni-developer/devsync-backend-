@@ -9,5 +9,5 @@
     "forceConsistentCasingInFileNames": true,
     "noEmit": true
   },
-  "include": ["api/**/*", "lib/**/*"]
+  "include": ["api/**/*", "lib/**/*", "src/**/*"]
 }

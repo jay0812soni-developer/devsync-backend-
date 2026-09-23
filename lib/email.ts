@@ -1,31 +1,36 @@
 import nodemailer from 'nodemailer';
 
-// Configure SMTP transport with Gmail credentials or fallback environment variables
+// Configure SMTP transport with environment variables
 const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
 const smtpPort = parseInt(process.env.SMTP_PORT || '465', 10);
 const smtpUser = process.env.SMTP_USER || '';
 const smtpPass = (process.env.SMTP_PASS || '').replace(/\s+/g, '');
 const fromEmail = process.env.FROM_EMAIL || `"DevSync" <${smtpUser}>`;
 
-const transporter = nodemailer.createTransport(
-  smtpHost === 'smtp.gmail.com'
-    ? {
-        service: 'gmail',
-        auth: {
-          user: smtpUser,
-          pass: smtpPass,
-        },
-      }
-    : {
-        host: smtpHost,
-        port: smtpPort,
-        secure: smtpPort === 465,
-        auth: {
-          user: smtpUser,
-          pass: smtpPass,
-        },
-      }
-);
+function getTransporter() {
+  if (!smtpUser || !smtpPass) {
+    throw new Error('SMTP credentials not configured. Please set SMTP_USER and SMTP_PASS in environment variables.');
+  }
+  return nodemailer.createTransport(
+    smtpHost === 'smtp.gmail.com'
+      ? {
+          service: 'gmail',
+          auth: {
+            user: smtpUser,
+            pass: smtpPass,
+          },
+        }
+      : {
+          host: smtpHost,
+          port: smtpPort,
+          secure: smtpPort === 465,
+          auth: {
+            user: smtpUser,
+            pass: smtpPass,
+          },
+        }
+  );
+}
 
 /**
  * Builds our signature dark-mode DevSync email template
@@ -134,6 +139,7 @@ export async function sendOtpEmail(recipientEmail: string, otp: string, recipien
     }
 
     const htmlContent = buildDevSyncEmailHtml(otp, recipientName);
+    const transporter = getTransporter();
 
     const info = await transporter.sendMail({
       from: fromEmail,
