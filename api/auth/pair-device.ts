@@ -8,6 +8,8 @@ import {
   enqueueMessageInStore,
   isRedisConfigured,
   getDeviceFromStore,
+  addDeviceToGroup,
+  getGroupDevices,
 } from '../../lib/redis';
 import { DeviceRegistration, PairedConnection, EncryptedMessagePayload } from '../../lib/types';
 
@@ -97,7 +99,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     };
     await registerDeviceInStore(secondaryDevice);
 
-    // 3. Update persistent pairing in store
+    // Ensure primary device is recorded in group
+    if (primaryDevice) {
+      await addDeviceToGroup(cleanCode, primaryDevice, true);
+    }
+    // Add secondary device to group
+    await addDeviceToGroup(cleanCode, secondaryDevice, false);
+
+    // Fetch all current group devices
+    const allGroupDevices = await getGroupDevices(cleanCode);
+    const otherDevices = allGroupDevices.filter((d) => d.deviceId !== secondaryDevice.deviceId);
+
+    // 3. Update persistent legacy pairing in store
     const updatedPair: PairedConnection = {
       connectionCode: cleanCode,
       primaryDevice,
@@ -107,29 +120,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     };
     await savePairedConnectionInStore(updatedPair);
 
-    // 4. Send real-time pairing notification event to Device 1 so its SSE stream pops "Hurray!"
-    const pairNotificationToDevice1: EncryptedMessagePayload = {
-      id: `pair-notify-${Date.now()}`,
-      senderDeviceId: secondaryDevice.deviceId,
-      recipientDeviceId: primaryDevice.deviceId,
-      type: 'device_paired',
-      cipherText: Buffer.from(
-        JSON.stringify({
-          pairedDevice: secondaryDevice,
-          message: 'Connection Established! Hurray!',
-          timestamp: Date.now(),
-        })
-      ).toString('base64'),
-      nonce: 'system-paired',
-      mac: 'system-mac',
-      timestamp: Date.now(),
-    };
-    await enqueueMessageInStore(pairNotificationToDevice1);
+    // 4. Fan-out real-time pairing notification event to ALL existing devices in the group
+    for (const peer of otherDevices) {
+      const pairNotification: EncryptedMessagePayload = {
+        id: `pair-notify-${Date.now()}-${peer.deviceId}`,
+        senderDeviceId: secondaryDevice.deviceId,
+        recipientDeviceId: peer.deviceId,
+        type: 'device_paired',
+        cipherText: Buffer.from(
+          JSON.stringify({
+            pairedDevice: secondaryDevice,
+            message: 'New device joined the network!',
+            timestamp: Date.now(),
+          })
+        ).toString('base64'),
+        nonce: 'system-paired',
+        mac: 'system-mac',
+        timestamp: Date.now(),
+      };
+      await enqueueMessageInStore(pairNotification);
+    }
 
     const token = jwt.sign(
       {
         email: user?.email || '',
         deviceId: secondaryDevice.deviceId,
+        connectionCode: cleanCode,
         role: 'MEMBER',
       },
       JWT_SECRET,
@@ -146,7 +162,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         phone: user?.phone || '',
       },
       pairedDevice: primaryDevice,
-      peers: [primaryDevice],
+      peers: otherDevices.length > 0 ? otherDevices : [primaryDevice],
     });
   } catch (err: any) {
     console.error('Error in pair-device:', err);

@@ -6,7 +6,7 @@
     "start": "tsx src/server.ts",
     "dev": "tsx watch src/server.ts",
     "build": "tsc --noEmit",
-    "test": "node --test test/totp.test.mjs && tsx --test test/mesh_server.test.ts"
+    "test": "node --test test/totp.test.mjs && tsx --test test/mesh_server.test.ts && tsx --test test/serverless_group.test.ts"
   },
   "dependencies": {
     "@fastify/cors": "^11.3.0",

@@ -91,6 +91,35 @@ class MemoryStorage {
   async getPairing(code: string): Promise<PairedConnection | null> {
     return this.pairings.get(code) || null;
   }
+
+  // Multi-Device Groups
+  private groupDevices = new Map<string, DeviceRegistration[]>(); // Key: connectionCode
+  private deviceCodes = new Map<string, string>(); // Key: deviceId -> connectionCode
+
+  async addGroupDevice(connectionCode: string, device: DeviceRegistration, isPrimary: boolean = false): Promise<DeviceRegistration[]> {
+    const list = this.groupDevices.get(connectionCode) || [];
+    const idx = list.findIndex((d) => d.deviceId === device.deviceId);
+    if (idx >= 0) {
+      list[idx] = device;
+    } else {
+      if (isPrimary) {
+        list.unshift(device);
+      } else {
+        list.push(device);
+      }
+    }
+    this.groupDevices.set(connectionCode, list);
+    this.deviceCodes.set(device.deviceId, connectionCode);
+    return list;
+  }
+
+  async getGroupDevices(connectionCode: string): Promise<DeviceRegistration[]> {
+    return this.groupDevices.get(connectionCode) || [];
+  }
+
+  async getCodeForDevice(deviceId: string): Promise<string | null> {
+    return this.deviceCodes.get(deviceId) || null;
+  }
 }
 
 const memoryStorage = new MemoryStorage();
@@ -403,3 +432,68 @@ export async function getPairedConnectionFromStore(code: string): Promise<Paired
   }
   return memoryStorage.getPairing(code);
 }
+
+// --- Multi-Device Personal Mesh Group Store ---
+
+export async function addDeviceToGroup(
+  connectionCode: string,
+  device: DeviceRegistration,
+  isPrimary: boolean = false
+): Promise<DeviceRegistration[]> {
+  await memoryStorage.addGroupDevice(connectionCode, device, isPrimary);
+  if (redis) {
+    try {
+      // 1. Map deviceId -> connectionCode for reverse lookup
+      await redis.set(`device_code:${device.deviceId}`, connectionCode);
+
+      // 2. Fetch current group list from Redis
+      const raw = await redis.get<string>(`group_devices:${connectionCode}`);
+      let list: DeviceRegistration[] = [];
+      if (raw) {
+        list = typeof raw === 'string' ? JSON.parse(raw) : raw;
+      }
+      const idx = list.findIndex((d) => d.deviceId === device.deviceId);
+      if (idx >= 0) {
+        list[idx] = device;
+      } else {
+        if (isPrimary) {
+          list.unshift(device);
+        } else {
+          list.push(device);
+        }
+      }
+      await redis.set(`group_devices:${connectionCode}`, JSON.stringify(list));
+      return list;
+    } catch (e) {
+      console.warn('Redis addDeviceToGroup error:', e);
+    }
+  }
+  return memoryStorage.getGroupDevices(connectionCode);
+}
+
+export async function getGroupDevices(connectionCode: string): Promise<DeviceRegistration[]> {
+  if (redis) {
+    try {
+      const raw = await redis.get<string>(`group_devices:${connectionCode}`);
+      if (raw) {
+        return typeof raw === 'string' ? JSON.parse(raw) : (raw as DeviceRegistration[]);
+      }
+    } catch (e) {
+      console.warn('Redis getGroupDevices error:', e);
+    }
+  }
+  return memoryStorage.getGroupDevices(connectionCode);
+}
+
+export async function getGroupCodeForDevice(deviceId: string): Promise<string | null> {
+  if (redis) {
+    try {
+      const code = await redis.get<string>(`device_code:${deviceId}`);
+      if (code) return typeof code === 'string' ? code : JSON.stringify(code);
+    } catch (e) {
+      console.warn('Redis getGroupCodeForDevice error:', e);
+    }
+  }
+  return memoryStorage.getCodeForDevice(deviceId);
+}
+

@@ -7,6 +7,7 @@ import {
   saveUserInStore,
   registerDeviceInStore,
   savePairedConnectionInStore,
+  addDeviceToGroup,
   markOtpUsed,
   isOtpUsed,
 } from '../../lib/redis';
@@ -122,12 +123,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         createdAt: Date.now(),
       };
       await savePairedConnectionInStore(pair);
+
+      // Register primary device in group devices registry
+      await addDeviceToGroup(user.connectionCode, devReg, true);
     }
 
     const token = jwt.sign(
       {
         email: user.email,
         deviceId: device?.deviceId || user.primaryDeviceId || 'device-primary',
+        connectionCode: user.connectionCode,
         role: 'PRIMARY',
       },
       JWT_SECRET,
