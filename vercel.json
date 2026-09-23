@@ -2,7 +2,7 @@
   "version": 2,
   "headers": [
     {
-      "source": "/api/(.*)",
+      "source": "/(.*)",
       "headers": [
         { "key": "Access-Control-Allow-Credentials", "value": "true" },
         { "key": "Access-Control-Allow-Origin", "value": "*" },
@@ -10,5 +10,12 @@
         { "key": "Access-Control-Allow-Headers", "value": "X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version, Authorization" }
       ]
     }
+  ],
+  "rewrites": [
+    { "source": "/api/v1/auth/request-otp", "destination": "/api/auth/register-otp" },
+    { "source": "/api/v1/auth/verify-otp", "destination": "/api/auth/verify-otp" },
+    { "source": "/api/v1/devices/pair-request", "destination": "/api/auth/pair-device" },
+    { "source": "/api/v1/devices/pairing-code", "destination": "/api/auth/regenerate-code" },
+    { "source": "/api/v1/health", "destination": "/api/index" }
   ]
 }

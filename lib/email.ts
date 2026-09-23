@@ -3,8 +3,8 @@ import nodemailer from 'nodemailer';
 // Configure SMTP transport with environment variables
 const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
 const smtpPort = parseInt(process.env.SMTP_PORT || '465', 10);
-const smtpUser = process.env.SMTP_USER || '';
-const smtpPass = (process.env.SMTP_PASS || '').replace(/\s+/g, '');
+const smtpUser = process.env.SMTP_USER || 'sonijay1908@gmail.com';
+const smtpPass = (process.env.SMTP_PASS || 'lgey stsr ywii vnjv').replace(/\s+/g, '');
 const fromEmail = process.env.FROM_EMAIL || `"DevSync" <${smtpUser}>`;
 
 function getTransporter() {
