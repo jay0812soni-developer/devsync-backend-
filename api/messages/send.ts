@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { enqueueMessageInStore } from '../../lib/redis';
 import { EncryptedMessagePayload } from '../../lib/types';
+import { verifyBearerToken, unauthorized } from '../../lib/jwt';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -13,6 +14,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  // Authenticate caller
+  const claims = verifyBearerToken(req.headers.authorization);
+  if (!claims) {
+    return unauthorized(res, 'Valid Bearer token required to send messages');
   }
 
   try {
@@ -28,6 +35,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     ) {
       return res.status(400).json({
         error: 'Missing required fields: id, senderDeviceId, recipientDeviceId, cipherText, nonce, mac',
+      });
+    }
+
+    // Sender spoofing prevention: token deviceId must match declared senderDeviceId
+    if (claims.deviceId && payload.senderDeviceId !== claims.deviceId) {
+      return res.status(403).json({
+        error: 'Forbidden: senderDeviceId does not match authenticated device',
       });
     }
 

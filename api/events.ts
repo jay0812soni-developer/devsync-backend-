@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { fetchAndClearMessages } from '../lib/redis';
+import { verifyBearerToken, unauthorized } from '../lib/jwt';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -10,9 +11,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).end();
   }
 
+  // Authenticate caller: a device may only read its own message stream
+  const claims = verifyBearerToken(req.headers.authorization);
+  if (!claims) {
+    return unauthorized(res, 'Valid Bearer token required to read events');
+  }
+
   const { deviceId } = req.query;
   if (!deviceId || typeof deviceId !== 'string') {
     return res.status(400).json({ error: 'deviceId query parameter is required' });
+  }
+
+  // IDOR prevention: query deviceId must match the authenticated device
+  if (claims.deviceId && deviceId !== claims.deviceId) {
+    return unauthorized(res, 'Forbidden: deviceId does not match authenticated device');
   }
 
   const isSse = req.headers.accept?.includes('text/event-stream');
