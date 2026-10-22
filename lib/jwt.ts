@@ -50,7 +50,7 @@ export function signSessionToken(
   claims: Omit<DevSyncJwtClaims, 'iat' | 'exp'>,
   expiresIn: string = '30d'
 ): string {
-  return jwt.sign(claims, secret(), { expiresIn });
+  return jwt.sign(claims, secret(), { expiresIn: expiresIn as any });
 }
 
 /** Verifies a Bearer token and returns its claims, or null if invalid. */
