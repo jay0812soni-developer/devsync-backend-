@@ -117,6 +117,21 @@ class MemoryStorage {
     return this.groupDevices.get(connectionCode) || [];
   }
 
+  async removeGroupDevice(connectionCode: string, deviceId: string): Promise<void> {
+    const list = this.groupDevices.get(connectionCode) || [];
+    this.groupDevices.set(connectionCode, list.filter((d) => d.deviceId !== deviceId));
+    this.deviceCodes.delete(deviceId);
+  }
+
+  async deleteGroup(connectionCode: string): Promise<void> {
+    const list = this.groupDevices.get(connectionCode) || [];
+    for (const d of list) {
+      this.deviceCodes.delete(d.deviceId);
+    }
+    this.groupDevices.delete(connectionCode);
+    this.pairings.delete(connectionCode);
+  }
+
   async getCodeForDevice(deviceId: string): Promise<string | null> {
     return this.deviceCodes.get(deviceId) || null;
   }
@@ -496,4 +511,39 @@ export async function getGroupCodeForDevice(deviceId: string): Promise<string | 
   }
   return memoryStorage.getCodeForDevice(deviceId);
 }
+
+export async function removeDeviceFromGroup(connectionCode: string, deviceId: string): Promise<void> {
+  await memoryStorage.removeGroupDevice(connectionCode, deviceId);
+  if (redis) {
+    try {
+      await redis.del(`device_code:${deviceId}`);
+      const raw = await redis.get<string>(`group_devices:${connectionCode}`);
+      if (raw) {
+        let list: DeviceRegistration[] = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        list = list.filter((d) => d.deviceId !== deviceId);
+        await redis.set(`group_devices:${connectionCode}`, JSON.stringify(list));
+      }
+    } catch (e) {
+      console.warn('Redis removeDeviceFromGroup error:', e);
+    }
+  }
+}
+
+export async function deleteGroupConnection(connectionCode: string): Promise<void> {
+  const currentMembers = await getGroupDevices(connectionCode);
+  await memoryStorage.deleteGroup(connectionCode);
+  if (redis) {
+    try {
+      for (const m of currentMembers) {
+        await redis.del(`device_code:${m.deviceId}`);
+      }
+      await redis.del(`group_devices:${connectionCode}`);
+      await redis.del(`pairing:${connectionCode}`);
+      await redis.del(`code_map:${connectionCode}`);
+    } catch (e) {
+      console.warn('Redis deleteGroupConnection error:', e);
+    }
+  }
+}
+
 

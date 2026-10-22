@@ -38,7 +38,7 @@ export interface EncryptedMessagePayload {
   id: string;
   senderDeviceId: string;
   recipientDeviceId: string;
-  type: 'text' | 'code' | 'file_offer' | 'status_update' | 'device_paired';
+  type: 'text' | 'code' | 'file_offer' | 'status_update' | 'device_paired' | 'session_terminated' | 'device_left' | string;
   cipherText: string;
   nonce: string;
   mac: string;
