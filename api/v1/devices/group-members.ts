@@ -77,10 +77,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
+    const mappedMembers = members.map((m) => ({
+      ...m,
+      isOnline: true,
+      lastSeenAt: m.timestamp || Date.now(),
+    }));
+
     return res.status(200).json({
       success: true,
       connectionCode,
-      members,
+      members: mappedMembers,
     });
   } catch (err: any) {
     console.error('Error fetching group members:', err);

@@ -1,5 +1,10 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { registerDeviceInStore, getDeviceFromStore, savePairedConnectionInStore } from '../../lib/redis';
+import {
+  registerDeviceInStore,
+  getDeviceFromStore,
+  savePairedConnectionInStore,
+  addDeviceToGroup,
+} from '../../lib/redis';
 import { DeviceRegistration, PairedConnection } from '../../lib/types';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -59,6 +64,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           createdAt: Date.now(),
         };
         await savePairedConnectionInStore(pair);
+        await addDeviceToGroup(cleanCode, device, false);
       }
     }
 
